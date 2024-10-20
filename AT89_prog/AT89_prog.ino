@@ -1,17 +1,21 @@
 /*
  * For AT89C2051 programming
  * 
+ * Modified sketch for LEAP's charge pump
+ * https://leap.tardate.com/8051/at89c2051/programmer/
  */
 #include <stdint.h>
 
+#define PUMP_A_PIN 3
+#define PUMP_B_PIN 11
+
 #define RST_PIN A0
-#define EN_12V_PIN A1
-#define P32_PIN A3
-#define P33_PIN A4
-#define P34_PIN A5
-#define P35_PIN 2
-#define P37_PIN 3
-#define XTAL1_PIN A2
+#define P32_PIN A2
+#define P33_PIN A3
+#define P34_PIN A4
+#define P35_PIN A5
+#define P37_PIN 12
+#define XTAL1_PIN A1
 
 #define CMD_ERASE 'X'
 #define CMD_READ_FULL 'R'
@@ -47,21 +51,40 @@ void serial_write_byte(uint8_t b) {
 }
 
 uint8_t paralel_pins[] = {
-  4, //P1.0
+  2, //P1.0
+  4,
   5,
   6,
   7,
   8,
   9,
-  10,
-  11, //P1.7
+  10, //P1.7
 };
 
+/*
+ * Enable Timer2 Fast PWM on pin 3, 11
+ *   NB: pins must be set to OUTPUT for PWM to appear on the pins
+ *   Fast PWM  : WGM21 WGM20
+ *   Clear OC2A on Compare Match (COM2A1)
+ *   Set   OC2B on Compare Match (COM2B1 + COM2B0)
+ *   Frequency : 16MHz/1/256 = 62.5kHz (CS20)
+ *   Pin 11    : (127+1)/256 = 50% duty cycle (OCR2A)
+ *   Pin 3     : (127+1)/256 = 50% duty cycle (OCR2B)
+ */
+void startPwm() {
+  TCCR2A = _BV(COM2A1) | _BV(COM2B1) | _BV(COM2B0) | _BV(WGM21) | _BV(WGM20);
+  TCCR2B = _BV(CS20);
+  OCR2A = 127;
+  OCR2B = 127;
+}
+
 void on12() {
-  digitalWrite(EN_12V_PIN, HIGH);
+  pinMode(PUMP_A_PIN, OUTPUT);
+  pinMode(PUMP_B_PIN, OUTPUT);
 }
 void off12() {
-  digitalWrite(EN_12V_PIN, LOW);
+  pinMode(PUMP_A_PIN, INPUT);
+  pinMode(PUMP_B_PIN, INPUT);
 }
 
 uint8_t read_byte() {
@@ -182,9 +205,10 @@ void stop_write() {
 }
 
 void setup() {
+  startPwm();
+
   Serial.begin(9600);
   pinMode(RST_PIN, OUTPUT);
-  pinMode(EN_12V_PIN, OUTPUT);
   pinMode(P32_PIN, OUTPUT);
   pinMode(P33_PIN, OUTPUT);
   pinMode(P34_PIN, OUTPUT);
@@ -196,7 +220,6 @@ void setup() {
     pinMode(paralel_pins[i], INPUT);
 
   digitalWrite(RST_PIN, LOW);
-  digitalWrite(EN_12V_PIN, LOW);
   digitalWrite(P32_PIN, LOW);
   digitalWrite(P33_PIN, LOW);
   digitalWrite(P34_PIN, LOW);
